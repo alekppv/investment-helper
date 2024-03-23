@@ -14,8 +14,8 @@ enum class TelegramEvents(
     SHOW_STRATEGIES("strategies", "/Торговые стратегии", KeyboardButton("strategies"))
 }
 
-fun String.validNotCommand(): Boolean {
+fun String.isNotCommand(): Boolean {
     val commands = TelegramEvents.entries.map { it.code } + TelegramEvents.entries.map { it.command }
 
-    return commands.contains(this)
+    return !commands.contains(this)
 }
