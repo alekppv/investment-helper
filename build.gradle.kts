@@ -17,12 +17,20 @@ java {
 repositories {
 	mavenCentral()
 	maven { url = uri("https://repo.spring.io/milestone") }
+	maven { url = uri("https://jitpack.io") }
 	maven { url = uri("https://repo.spring.io/snapshot") }
 }
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
+	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("io.github.microutils:kotlin-logging:2.1.23")
+	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+	implementation("io.github.kotlin-telegram-bot.kotlin-telegram-bot:telegram:6.1.0")
+
+	runtimeOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
