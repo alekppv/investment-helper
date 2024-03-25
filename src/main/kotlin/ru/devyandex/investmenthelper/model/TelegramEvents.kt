@@ -1,21 +1,25 @@
 package ru.devyandex.investmenthelper.model
 
-import com.github.kotlintelegrambot.entities.keyboard.KeyboardButton
+import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 
+/**
+ * Описание событий для телеграм бота.
+ * @param code - команда для бота, которая обрабатывается как сообщение, начинающееся с '/'
+ * @param button - соответствующая кнопка для команды
+ */
 enum class TelegramEvents(
     val code: String,
-    val command: String,
-    val button: KeyboardButton
+    val button: InlineKeyboardButton
 ) {
-    START("start", "/Запустить торгового робота", KeyboardButton("Запустить торгового робота")),
-    HELP("help", "/Помощь по командам", KeyboardButton("Помощь по командам")),
-    SHOW_MENU("menu", "/Основные команды", KeyboardButton("Основные команды")),
-    SHOW_TICKERS("tickers", "/Торговые инструменты", KeyboardButton("tickers")),
-    SHOW_STRATEGIES("strategies", "/Торговые стратегии", KeyboardButton("strategies"))
+    START("start", InlineKeyboardButton.CallbackData(text = "Запустить торгового робота", callbackData = "start")),
+    HELP("help", InlineKeyboardButton.CallbackData(text = "Помощь по командам", callbackData = "help")),
+    SHOW_MENU("menu", InlineKeyboardButton.CallbackData(text = "Основные команды", callbackData = "menu")),
+    SHOW_TICKERS("tickers", InlineKeyboardButton.CallbackData(text = "Торговые инструменты", callbackData = "tickers")),
+    SHOW_STRATEGIES("strategies", InlineKeyboardButton.CallbackData(text = "Торговые стратегии", callbackData = "strategies"))
 }
 
 fun String.isNotCommand(): Boolean {
-    val commands = TelegramEvents.entries.map { it.code } + TelegramEvents.entries.map { it.command }
+    val commands = TelegramEvents.entries.map { "/${it.code}" } + TelegramEvents.entries.map { it.name }
 
     return !commands.contains(this)
 }
