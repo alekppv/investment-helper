@@ -78,11 +78,8 @@ class TelegramBotService(
     }
 
     private fun getKeyboardReplyMarkup(vararg buttons: InlineKeyboardButton): InlineKeyboardMarkup {
-        val keyboard: MutableList<List<InlineKeyboardButton>> = mutableListOf()
-
-
-        buttons.map {
-            keyboard.add(listOf(it))
+        val keyboard: List<List<InlineKeyboardButton>> = buttons.map {
+            listOf(it)
         }
 
         return InlineKeyboardMarkup.create(keyboard)
