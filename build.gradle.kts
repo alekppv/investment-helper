@@ -32,6 +32,7 @@ dependencies {
 	runtimeOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	implementation("ru.tinkoff.piapi:java-sdk-core:1.19")
 }
 
 tasks.withType<KotlinCompile> {
