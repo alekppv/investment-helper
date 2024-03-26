@@ -10,6 +10,7 @@ import ru.devyandex.investmenthelper.util.toAmountCurrencyString
 import ru.devyandex.investmenthelper.util.toInvestApiResponse
 
 @Service
+//TODO Добавить логи
 class UserService(
     private val apiClientProvider: InvestApiClientProvider
 ) {

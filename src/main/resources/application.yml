@@ -2,5 +2,5 @@ app:
   port: 8080
 telegram:
   token: 7085185377:AAEs4yPd7e2RVWMNMbOrSZsBlvsAKnRRZsY
-hepler:
+helper:
   client-provider-type: SANDBOX
