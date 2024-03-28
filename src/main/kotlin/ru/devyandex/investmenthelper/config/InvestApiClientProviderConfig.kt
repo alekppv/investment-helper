@@ -9,6 +9,6 @@ import ru.devyandex.investmenthelper.service.core.apiclient.SandboxInvestApiClie
 @Configuration
 class InvestApiClientProviderConfig {
     @Bean
-    @ConditionalOnProperty(name = ["hepler.client-provider-type"], havingValue = "SANDBOX", matchIfMissing = true)
+    @ConditionalOnProperty(name = ["helper.client-provider-type"], havingValue = "SANDBOX", matchIfMissing = true)
     fun sandboxInvestApiClientProvider(): InvestApiClientProvider = SandboxInvestApiClientProviderImpl()
 }

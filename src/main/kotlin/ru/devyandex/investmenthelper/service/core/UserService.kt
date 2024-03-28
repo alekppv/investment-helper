@@ -8,6 +8,9 @@ import ru.devyandex.investmenthelper.service.core.apiclient.InvestApiClientProvi
 import ru.devyandex.investmenthelper.util.createErrorResponse
 import ru.devyandex.investmenthelper.util.toAmountCurrencyString
 import ru.devyandex.investmenthelper.util.toInvestApiResponse
+import ru.tinkoff.piapi.contract.v1.MoneyValue
+import ru.tinkoff.piapi.core.utils.MapperUtils
+import java.math.BigDecimal
 
 @Service
 //TODO Добавить логи
@@ -32,6 +35,22 @@ class UserService(
         } catch (ex: Exception) {
             false
         }
+
+    /**
+     * Проверка на авторизацию пользователя по токену
+     * @param id - Уникальный идентификатор пользователя
+     *
+     * @return True если пользователь уже авторизован, иначе false
+     */
+    fun clientExists(id: Long?) = id?.let {
+        apiClientProvider.getClient(id) != null
+    } ?: false
+
+    /**
+     * Удаление пользователя
+     * @param id - Уникальный идентификатор пользователя
+     */
+    fun removeClient(id: Long) = apiClientProvider.removeClient(id)
 
     /**
      * Получение списка счетов в песочнице
@@ -84,13 +103,13 @@ class UserService(
     }
 
     /**
-     * Открытие нового счета в песочнице
+     * Открытие нового счета в песочнице и его автоматическое пополнение
      * @param id - Уникальный идентификатор пользователя
      * @param name - Название нового счета
      *
      * @return идентификатор нового счета
      */
-    fun openNewAccount(id: Long, name: String?): InvestApiResponse<String?> {
+    fun openNewAccountAndPayIn(id: Long, name: String?): InvestApiResponse<String?> {
         val client = apiClientProvider
             .getClient(id)
             ?: run {
@@ -102,11 +121,37 @@ class UserService(
         }
 
         return wrapMethod(errorMessage = "Не удалось открыть новый счет") {
-            client
-                .apiClient
-                .sandboxService.openAccountSync(name)
+            with(client.apiClient.sandboxService) {
+                val accountId = this.openAccountSync(name)
+
+                this.payInSync(accountId, MapperUtils.bigDecimalToMoneyValue(BigDecimal(100000), "rub"))
+
+                accountId
+            }
+        }
+    }
+
+    /**
+     * Закрытие счета в песочнице
+     * @param id - Уникальный идентификатор пользователя
+     * @param accountId - Идентификатор счета
+     *
+     * @return идентификатор закрытого счета
+     */
+    fun closeAccount(id: Long, accountId: String): InvestApiResponse<Unit?> {
+        val client = apiClientProvider
+            .getClient(id)
+            ?: run {
+                return createErrorResponse("Пользователь не найден")
+            }
+
+        if (!client.apiClient.isSandboxMode) {
+            return createErrorResponse("Закрыть счет через апи можно только для песочницы")
         }
 
+        return wrapMethod(errorMessage = "Не удалось закрыть счет") {
+            client.apiClient.sandboxService.closeAccountSync(accountId)
+        }
     }
 
     /**
@@ -143,7 +188,7 @@ class UserService(
         }
     }
 
-    private fun <T>wrapMethod(errorMessage: String, block: () -> T?) =
+    private fun <T> wrapMethod(errorMessage: String, block: () -> T?) =
         try {
             block().toInvestApiResponse()
         } catch (ex: Exception) {
