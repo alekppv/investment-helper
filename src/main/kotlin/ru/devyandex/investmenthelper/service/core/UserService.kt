@@ -8,7 +8,6 @@ import ru.devyandex.investmenthelper.service.core.apiclient.InvestApiClientProvi
 import ru.devyandex.investmenthelper.util.createErrorResponse
 import ru.devyandex.investmenthelper.util.toAmountCurrencyString
 import ru.devyandex.investmenthelper.util.toInvestApiResponse
-import ru.tinkoff.piapi.contract.v1.MoneyValue
 import ru.tinkoff.piapi.core.utils.MapperUtils
 import java.math.BigDecimal
 
