@@ -1,7 +1,7 @@
 package ru.devyandex.investmenthelper.service.core.strategy
 
 import org.springframework.stereotype.Service
-import org.ta4j.core.BaseBar
+import org.ta4j.core.Bar
 import org.ta4j.core.BaseBarSeries
 import org.ta4j.core.BaseStrategy
 import org.ta4j.core.indicators.ATRIndicator
@@ -12,26 +12,20 @@ import org.ta4j.core.rules.OverIndicatorRule
 import org.ta4j.core.rules.StopGainRule
 import org.ta4j.core.rules.StopLossRule
 import org.ta4j.core.rules.UnderIndicatorRule
+import ru.devyandex.investmenthelper.dto.enums.Interval
 import ru.devyandex.investmenthelper.dto.setting.CompanyStrategy
 import ru.devyandex.investmenthelper.dto.strategy.StrategyEnum
-import ru.devyandex.investmenthelper.dto.user.ApiClientDto
-import ru.devyandex.investmenthelper.service.core.apiclient.InvestApiClientProvider
 import ru.devyandex.investmenthelper.service.core.marketdata.IMarketDataService
 import ru.devyandex.investmenthelper.service.core.rule.AllInSeriesRule
 import ru.devyandex.investmenthelper.service.core.rule.OverOrEqualIndicatorRule
 import ru.devyandex.investmenthelper.service.core.rule.UnderOrEqualIndicatorRule
-import ru.devyandex.investmenthelper.util.toBaseBar
-import ru.tinkoff.piapi.contract.v1.CandleInterval
-import ru.tinkoff.piapi.contract.v1.SubscriptionInterval
 import java.math.BigDecimal
-import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class SimpleScalpingStrategy(
-    private val clientProvider: InvestApiClientProvider,
     private val marketDataService: IMarketDataService
 ) : Strategy {
     override fun getName() = StrategyEnum.SIMPLE_SCALPING
@@ -39,11 +33,10 @@ class SimpleScalpingStrategy(
     private val barSeriesStorage = ConcurrentHashMap<Long, BaseBarSeries>()
 
     override fun startProcessing(id: Long, companyStrategy: CompanyStrategy) {
-        val client = clientProvider.getClient(id) ?: throw Exception()
-        val duration = Duration.ofMinutes(5)
+        val interval = Interval.INTERVAL_5_MIN
 
-        importHistoricalData(client, id, companyStrategy, duration)
-        //subscribeToNewData(id, companyStrategy, duration)
+        importHistoricalData(id, companyStrategy, interval)
+        subscribeToNewData(id, companyStrategy, interval)
 
         createIndicators(id)
     }
@@ -103,36 +96,35 @@ class SimpleScalpingStrategy(
     private fun subscribeToNewData(
         id: Long,
         companyStrategy: CompanyStrategy,
-        duration: Duration
+        interval: Interval
     ) {
         marketDataService.subscribeToCandlesStream(
             id,
             companyStrategy.id,
             { marketDataResponse ->
-                appendBar(id, marketDataResponse.candle.toBaseBar(duration))
+                appendBar(id, marketDataResponse)
             },
             { error -> println(error.message) },
-            SubscriptionInterval.SUBSCRIPTION_INTERVAL_FIVE_MINUTES
+            interval
         )
     }
 
     private fun importHistoricalData(
-        client: ApiClientDto,
         id: Long,
         companyStrategy: CompanyStrategy,
-        duration: Duration
+        interval: Interval
     ) {
         marketDataService
             .getCandles(
-                investApi = client.apiClient,
+                id = id,
                 from = OffsetDateTime.now().minusDays(5).toInstant(),
                 to = Instant.now(),
-                candleInterval = CandleInterval.CANDLE_INTERVAL_5_MIN,
+                interval = interval,
                 instrument = companyStrategy.id
-            ).map { appendBar(id, it.toBaseBar(duration)) }
+            ).map { appendBar(id, it) }
     }
 
-    private fun appendBar(id: Long, bar: BaseBar) {
+    private fun appendBar(id: Long, bar: Bar) {
         barSeriesStorage[id]?.addBar(bar)
             ?: { barSeriesStorage[id] = BaseBarSeries().also { it.addBar(bar) } }
     }

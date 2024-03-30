@@ -1,11 +1,7 @@
 package ru.devyandex.investmenthelper.service.core.marketdata
 
-import ru.tinkoff.piapi.contract.v1.CandleInterval
-import ru.tinkoff.piapi.contract.v1.HistoricCandle
-import ru.tinkoff.piapi.contract.v1.MarketDataResponse
-import ru.tinkoff.piapi.contract.v1.SubscriptionInterval
-import ru.tinkoff.piapi.core.InvestApi
-import ru.tinkoff.piapi.core.stream.StreamProcessor
+import org.ta4j.core.Bar
+import ru.devyandex.investmenthelper.dto.enums.Interval
 import java.time.Instant
 import java.util.function.Consumer
 
@@ -13,9 +9,9 @@ interface IMarketDataService {
     fun subscribeToCandlesStream(
         id: Long,
         instrument: String,
-        streamProcessor: StreamProcessor<MarketDataResponse>,
+        streamProcessor: (Bar) -> Unit,
         onErrorCallback: Consumer<Throwable>,
-        interval: SubscriptionInterval
+        interval: Interval
     ): Unit?
 
     fun unsubscribeFromCandleStream(
@@ -24,10 +20,10 @@ interface IMarketDataService {
     ): Unit?
 
     fun getCandles(
-        investApi: InvestApi,
+        id: Long,
         instrument: String,
         from: Instant,
         to: Instant,
-        candleInterval: CandleInterval
-    ): List<HistoricCandle>
+        interval: Interval
+    ): List<Bar>
 }

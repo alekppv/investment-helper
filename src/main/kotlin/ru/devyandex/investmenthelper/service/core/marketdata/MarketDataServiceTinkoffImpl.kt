@@ -2,13 +2,12 @@ package ru.devyandex.investmenthelper.service.core.marketdata
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.stereotype.Service
+import org.ta4j.core.Bar
+import ru.devyandex.investmenthelper.dto.enums.Interval
 import ru.devyandex.investmenthelper.service.core.apiclient.InvestApiClientProvider
-import ru.tinkoff.piapi.contract.v1.CandleInterval
-import ru.tinkoff.piapi.contract.v1.HistoricCandle
-import ru.tinkoff.piapi.contract.v1.MarketDataResponse
-import ru.tinkoff.piapi.contract.v1.SubscriptionInterval
-import ru.tinkoff.piapi.core.InvestApi
-import ru.tinkoff.piapi.core.stream.StreamProcessor
+import ru.devyandex.investmenthelper.util.toBaseBar
+import ru.devyandex.investmenthelper.util.toCandleInterval
+import ru.devyandex.investmenthelper.util.toSubscriptionInterval
 import java.time.Instant
 import java.util.function.Consumer
 
@@ -22,18 +21,18 @@ class MarketDataServiceTinkoffImpl(
     override fun subscribeToCandlesStream(
         id: Long,
         instrument: String,
-        streamProcessor: StreamProcessor<MarketDataResponse>,
+        streamProcessor: (Bar) -> Unit,
         onErrorCallback: Consumer<Throwable>,
-        interval: SubscriptionInterval
+        interval: Interval
     ) = clientProvider
         .getClient(id)
         ?.apiClient
         ?.marketDataStreamService
         ?.newStream(
             id.toString(),
-            streamProcessor,
+            { response -> streamProcessor(response.candle.toBaseBar(interval.toDuration())) },
             onErrorCallback
-        )?.subscribeCandles(listOf(instrument), interval)
+        )?.subscribeCandles(listOf(instrument), interval.toSubscriptionInterval())
 
 
     override fun unsubscribeFromCandleStream(
@@ -47,17 +46,16 @@ class MarketDataServiceTinkoffImpl(
         ?.unsubscribeCandles(listOf(instrument))
 
     override fun getCandles(
-        investApi: InvestApi,
+        id: Long,
         instrument: String,
         from: Instant,
         to: Instant,
-        candleInterval: CandleInterval
-    ): List<HistoricCandle> = investApi
-        .marketDataService
-        .getCandlesSync(
-            instrument,
-            from,
-            to,
-            candleInterval
-        )
+        interval: Interval
+    ): List<Bar> = clientProvider
+        .getClient(id)
+        ?.apiClient
+        ?.marketDataService
+        ?.getCandlesSync(instrument, from, to, interval.toCandleInterval())
+        ?.map { it.toBaseBar(interval.toDuration()) }
+        ?: emptyList()
 }
