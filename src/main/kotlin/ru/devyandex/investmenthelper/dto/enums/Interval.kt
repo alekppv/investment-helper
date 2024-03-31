@@ -2,6 +2,10 @@ package ru.devyandex.investmenthelper.dto.enums
 
 import java.time.Duration
 
+/**
+ * Набор интервалов с длительностью в минутах
+ * @property minuteDuration - длительность в минутах
+ */
 enum class Interval(val minuteDuration: Long) {
     INTERVAL_1_MIN(1),
     INTERVAL_5_MIN(5),
@@ -17,5 +21,8 @@ enum class Interval(val minuteDuration: Long) {
     INTERVAL_WEEK(10080),
     INTERVAL_30_DAYS(43200);
 
+    /**
+     * Метод для получения java.time.Duration соответствующий полю minuteDuration
+     */
     fun toDuration() = Duration.ofMinutes(this.minuteDuration)
 }

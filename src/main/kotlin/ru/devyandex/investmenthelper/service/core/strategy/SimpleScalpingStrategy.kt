@@ -1,10 +1,7 @@
 package ru.devyandex.investmenthelper.service.core.strategy
 
 import org.springframework.stereotype.Service
-import org.ta4j.core.Bar
-import org.ta4j.core.BaseBarSeries
-import org.ta4j.core.BaseStrategy
-import org.ta4j.core.indicators.ATRIndicator
+import org.ta4j.core.*
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandFacade
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
@@ -13,31 +10,31 @@ import org.ta4j.core.rules.StopGainRule
 import org.ta4j.core.rules.StopLossRule
 import org.ta4j.core.rules.UnderIndicatorRule
 import ru.devyandex.investmenthelper.dto.enums.Interval
+import ru.devyandex.investmenthelper.dto.enums.SignalType
+import ru.devyandex.investmenthelper.dto.enums.StrategyEnum
 import ru.devyandex.investmenthelper.dto.setting.CompanyStrategy
-import ru.devyandex.investmenthelper.dto.strategy.StrategyEnum
 import ru.devyandex.investmenthelper.service.core.marketdata.IMarketDataService
 import ru.devyandex.investmenthelper.service.core.rule.AllInSeriesRule
 import ru.devyandex.investmenthelper.service.core.rule.OverOrEqualIndicatorRule
 import ru.devyandex.investmenthelper.service.core.rule.UnderOrEqualIndicatorRule
+import ru.devyandex.investmenthelper.util.withName
+import ru.devyandex.investmenthelper.util.wrap
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.OffsetDateTime
-import java.util.concurrent.ConcurrentHashMap
+
 
 @Service
 class SimpleScalpingStrategy(
     private val marketDataService: IMarketDataService
-) : Strategy {
-    override fun getName() = StrategyEnum.SIMPLE_SCALPING
-
-    private val barSeriesStorage = ConcurrentHashMap<Long, BaseBarSeries>()
+) : AbstractStrategy() {
+    override fun getName(): StrategyEnum = StrategyEnum.SIMPLE_SCALPING
 
     override fun startProcessing(id: Long, companyStrategy: CompanyStrategy) {
         val interval = Interval.INTERVAL_5_MIN
 
         importHistoricalData(id, companyStrategy, interval)
         subscribeToNewData(id, companyStrategy, interval)
-
         createIndicators(id)
     }
 
@@ -48,7 +45,14 @@ class SimpleScalpingStrategy(
             val emaSlow = EMAIndicator(closePriceIndicator, EMA_SLOW_BAR_COUNT)
             val bollingerBandFacade =
                 BollingerBandFacade(closePriceIndicator, BOLLINGER_BAR_COUNT, BOLLINGER_MULTIPLIER)
-            val atr = ATRIndicator(barSeries, ATR_BAR_COUNT)
+
+            addIndicators(
+                id,
+                emaSlow.withName("EmaSlow"),
+                emaFast.withName("EmaFast"),
+                bollingerBandFacade.lower().withName("BollingerLower"),
+                bollingerBandFacade.upper().withName("BollingerUpper")
+            )
 
             val longStrategy = BaseStrategy(
                 "SIMPLE_SCALPING_LONG_0.0.1",
@@ -71,6 +75,8 @@ class SimpleScalpingStrategy(
                     )
                 )
             )
+
+            addStrategy(id, longStrategy.or(shortStrategy).wrap(SignalType.DEFAULT))
         }
     }
 
@@ -92,13 +98,11 @@ class SimpleScalpingStrategy(
         AllInSeriesRule(OverIndicatorRule(emaFast, emaSlow), 6)
             .and(OverOrEqualIndicatorRule(closePriceIndicator, bollingerBandFacade.upper()))
 
-
     private fun subscribeToNewData(
         id: Long,
         companyStrategy: CompanyStrategy,
         interval: Interval
-    ) {
-        marketDataService.subscribeToCandlesStream(
+    ) = marketDataService.subscribeToCandlesStream(
             id,
             companyStrategy.id,
             { marketDataResponse ->
@@ -107,33 +111,26 @@ class SimpleScalpingStrategy(
             { error -> println(error.message) },
             interval
         )
-    }
 
     private fun importHistoricalData(
         id: Long,
         companyStrategy: CompanyStrategy,
         interval: Interval
-    ) {
-        marketDataService
+    ) = marketDataService
             .getCandles(
                 id = id,
                 from = OffsetDateTime.now().minusDays(5).toInstant(),
                 to = Instant.now(),
                 interval = interval,
                 instrument = companyStrategy.id
-            ).map { appendBar(id, it) }
-    }
-
-    private fun appendBar(id: Long, bar: Bar) {
-        barSeriesStorage[id]?.addBar(bar)
-            ?: { barSeriesStorage[id] = BaseBarSeries().also { it.addBar(bar) } }
-    }
+            ).map {
+                appendBar(id, it)
+            }
 
     companion object {
-        private val ATR_BAR_COUNT = 7
-        private val BOLLINGER_BAR_COUNT = 15
+        private const val BOLLINGER_BAR_COUNT = 15
         private val BOLLINGER_MULTIPLIER = BigDecimal(1.5)
-        private val EMA_FAST_BAR_COUNT = 30
-        private val EMA_SLOW_BAR_COUNT = 50
+        private const val EMA_FAST_BAR_COUNT = 30
+        private const val EMA_SLOW_BAR_COUNT = 50
     }
 }

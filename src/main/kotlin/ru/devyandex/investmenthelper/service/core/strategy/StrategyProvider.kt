@@ -1,7 +1,7 @@
 package ru.devyandex.investmenthelper.service.core.strategy
 
 import org.springframework.stereotype.Service
-import ru.devyandex.investmenthelper.dto.strategy.StrategyEnum
+import ru.devyandex.investmenthelper.dto.enums.StrategyEnum
 
 @Service
 class StrategyProvider(

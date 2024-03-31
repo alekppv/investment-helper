@@ -36,8 +36,8 @@ dependencies {
 
 	implementation("ru.tinkoff.piapi:java-sdk-core:1.19")
 	implementation("org.ta4j:ta4j-core:0.16-SNAPSHOT")
-
 	implementation("com.opencsv:opencsv:5.9")
+	implementation("org.jfree:jfreechart:1.5.4")
 }
 
 tasks.withType<KotlinCompile> {
