@@ -7,7 +7,6 @@ import org.ta4j.core.BaseBar
 import ru.devyandex.investmenthelper.dto.enums.Interval
 import java.io.FileReader
 import java.math.BigDecimal
-import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -18,7 +17,7 @@ import java.util.function.Consumer
  * @property fileName - путь к CSV файлу, содержащему тестовые данных.
  * Пример формата данных:
  * Gmt time,Open,High,Low,Close,Volume
- * 30.09.2019 00:00:00.000,1.09425,1.09426,1.09405,1.09406,585.1
+ * 2024-03-07T06:55:00Z,1.09425,1.09426,1.09405,1.09406,585.1
  */
 class MarketDataFileMockService(fileName: String) : IMarketDataService {
     private val barList = mutableListOf<Bar>()
@@ -42,22 +41,27 @@ class MarketDataFileMockService(fileName: String) : IMarketDataService {
                         ?.let { line ->
                             try {
                                 bars.add(
-                                BaseBar(
-                                    Duration.ofMinutes(5),
-                                    SimpleDateFormat("dd.MM.yyyy hh:mm:ss.SSS").parse(line[0]).toInstant().atZone(ZoneId.of("UTC")),
-                                    BigDecimal(line[1]),
-                                    BigDecimal(line[2]),
-                                    BigDecimal(line[3]),
-                                    BigDecimal(line[4]),
-                                    BigDecimal(line[5])
+                                    BaseBar(
+                                        Duration.ofMinutes(5),
+                                        Instant.parse(line[0]).atZone(ZoneId.of("UTC"))
+                                            .withZoneSameInstant(ZoneId.of("Europe/Moscow")),
+                                        BigDecimal(line[1]),
+                                        BigDecimal(line[2]),
+                                        BigDecimal(line[3]),
+                                        BigDecimal(line[4]),
+                                        BigDecimal(line[5])
+                                    )
                                 )
-                                )
-                            } catch (ex: Exception) { println(ex.message) }
+                            } catch (ex: Exception) {
+                                println(ex.message)
+                            }
                         }
                 }
-                barList.addAll(bars.sortedBy { it.beginTime }.distinctBy { it.beginTime })
+                barList.addAll(bars)
             }
-        } catch (ex: Exception) { println(ex.message) }
+        } catch (ex: Exception) {
+            println(ex.message)
+        }
     }
 
     override fun subscribeToCandlesStream(
@@ -66,7 +70,8 @@ class MarketDataFileMockService(fileName: String) : IMarketDataService {
         streamProcessor: (Bar) -> Unit,
         onErrorCallback: Consumer<Throwable>,
         interval: Interval
-    ) {}
+    ) {
+    }
 
     override fun unsubscribeFromCandleStream(id: Long, instrument: String) {}
 
