@@ -7,6 +7,7 @@ import com.github.kotlintelegrambot.entities.Message
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.github.kotlintelegrambot.types.TelegramBotResult
 import ru.devyandex.investmenthelper.constants.Constants
+import ru.devyandex.investmenthelper.service.core.AccountService
 import ru.devyandex.investmenthelper.service.core.UserService
 
 /**
@@ -17,7 +18,8 @@ import ru.devyandex.investmenthelper.service.core.UserService
  */
 abstract class AbstractTelegramBotService(
     protected val apiToken: String,
-    protected val userService: UserService
+    protected val userService: UserService,
+    protected val accountService: AccountService
 ) {
 
     abstract fun init()
@@ -34,7 +36,7 @@ abstract class AbstractTelegramBotService(
         bot: Bot,
         clientId: Long,
     ): Boolean =
-        if (!userService.clientExists(clientId)) {
+        if (userService.getClientById(clientId) == null) {
             bot.sendMessage(
                 chatId = ChatId.fromId(clientId),
                 text = "${Constants.USER_NOT_FOUND} ${Constants.ENTER_TOKEN_MESSAGE}",

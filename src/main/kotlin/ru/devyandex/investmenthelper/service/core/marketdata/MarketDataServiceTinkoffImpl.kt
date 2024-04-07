@@ -1,6 +1,5 @@
 package ru.devyandex.investmenthelper.service.core.marketdata
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.stereotype.Service
 import org.ta4j.core.Bar
 import ru.devyandex.investmenthelper.dto.enums.Interval
@@ -12,7 +11,6 @@ import java.time.Instant
 import java.util.function.Consumer
 
 @Service
-@ConditionalOnMissingBean
 class MarketDataServiceTinkoffImpl(
     private val clientProvider: InvestApiClientProvider
 ) : IMarketDataService {

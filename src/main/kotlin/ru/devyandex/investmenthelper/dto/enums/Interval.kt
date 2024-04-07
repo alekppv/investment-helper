@@ -6,7 +6,7 @@ import java.time.Duration
  * Набор интервалов с длительностью в минутах
  * @property minuteDuration - длительность в минутах
  */
-enum class Interval(val minuteDuration: Long) {
+enum class Interval(private val minuteDuration: Long) {
     INTERVAL_1_MIN(1),
     INTERVAL_5_MIN(5),
     INTERVAL_15_MIN(15),
@@ -24,5 +24,5 @@ enum class Interval(val minuteDuration: Long) {
     /**
      * Метод для получения java.time.Duration соответствующий полю minuteDuration
      */
-    fun toDuration() = Duration.ofMinutes(this.minuteDuration)
+    fun toDuration(): Duration = Duration.ofMinutes(this.minuteDuration)
 }

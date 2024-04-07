@@ -12,21 +12,22 @@ import org.springframework.stereotype.Service
 import ru.devyandex.investmenthelper.constants.Constants
 import ru.devyandex.investmenthelper.constants.Constants.AUTH_SUCCESS_MESSAGE
 import ru.devyandex.investmenthelper.constants.Constants.HELP_MESSAGE
+import ru.devyandex.investmenthelper.constants.Constants.OPERATION_ERROR_MESSAGE
 import ru.devyandex.investmenthelper.constants.Constants.WELCOME_MESSAGE
-import ru.devyandex.investmenthelper.dto.enums.AccountStatus
-import ru.devyandex.investmenthelper.dto.enums.AccountType
 import ru.devyandex.investmenthelper.dto.enums.TelegramEvents.*
 import ru.devyandex.investmenthelper.dto.enums.isNotCommand
 import ru.devyandex.investmenthelper.dto.user.isToken
+import ru.devyandex.investmenthelper.service.core.AccountService
 import ru.devyandex.investmenthelper.service.core.UserService
-import java.math.BigDecimal
+import ru.devyandex.investmenthelper.util.toMessage
 
 @Service
 class TelegramBotService(
     @Value("\${telegram.token}")
     apiToken: String,
-    userService: UserService
-) : AbstractTelegramBotService(apiToken, userService) {
+    userService: UserService,
+    accountService: AccountService
+) : AbstractTelegramBotService(apiToken, userService, accountService) {
 
     @EventListener(ApplicationReadyEvent::class)
     override fun init() {
@@ -68,37 +69,46 @@ class TelegramBotService(
                         bot.sendMessage(
                             chatId = ChatId.fromId(clientId),
                             text = AUTH_SUCCESS_MESSAGE,
-                            replyMarkup = getKeyboardReplyMarkup(SHOW_ACCOUNTS.button, OPEN_ACCOUNTS.button)
+                            replyMarkup = getKeyboardReplyMarkup(SHOW_ACCOUNTS.button)
                         )
+                    } else {
+                        logger.error { "Пользователь ${callbackQuery.from.username} не авторизован!" }
                     }
                 }
                 callbackQuery(SHOW_ACCOUNTS.code) {
                     val chatId = callbackQuery.message?.chat?.id ?: return@callbackQuery
 
                     if (validateClient(bot, chatId)) {
-                        val accounts = userService.getClientAccounts(chatId)
-                        val accountsInfo = accounts.data?.associate { account ->
-                            account.id to userService.getAccountInfo(chatId, account.id)
+                        val accounts = accountService.getClientAccounts(chatId)
+                        val accountsInfo = accounts.data?.let {
+                            it.associate { account ->
+                                account.id to accountService.getAccountInfo(chatId, account.id)
+                            }
+                        } ?: run {
+                            bot.sendMessage(
+                                chatId = ChatId.fromId(chatId),
+                                text = accounts.message ?: OPERATION_ERROR_MESSAGE
+                            )
+                            logger.error { accounts.message }
+                            return@callbackQuery
                         }
 
-                        if (accountsInfo.isNullOrEmpty()) {
+                        if (accountsInfo.isEmpty()) {
                             bot.sendMessage(
                                 chatId = ChatId.fromId(chatId),
                                 text = Constants.ACCOUNTS_NOT_FOUND_MESSAGE,
                                 replyMarkup = getKeyboardReplyMarkup(OPEN_ACCOUNTS.button)
                             )
                         } else {
-                            val msg = accounts.data.joinToString(separator = "\n") {
-                                "${it.name}\n" +
-                                        "Тип счета: ${AccountType.valueOf(it.type).description}\n" +
-                                        "Статус: ${AccountStatus.valueOf(it.status).description}\n" +
-                                        "Стоимость портфеля: ${accountsInfo[it.id]?.data?.totalAmountPortfolio ?: BigDecimal(0)}"
+                            accounts.data.forEach { account ->
+                                bot.sendMessage(
+                                    chatId = ChatId.fromId(chatId),
+                                    text = account.toMessage(accountsInfo[account.id]?.data)
+                                )
                             }
-                            bot.sendMessage(
-                                chatId = ChatId.fromId(chatId),
-                                text = msg
-                            )
                         }
+                    } else {
+                        logger.error { "Пользователь ${callbackQuery.from.username} не авторизован!" }
                     }
                 }
                 text {
@@ -115,9 +125,7 @@ class TelegramBotService(
                                     chatId = ChatId.fromId(userId),
                                     text = AUTH_SUCCESS_MESSAGE,
                                     replyMarkup = getKeyboardReplyMarkup(
-                                        SHOW_ACCOUNTS.button,
-                                        //OPEN_ACCOUNTS.button,
-                                        //CLOSE_ACCOUNTS.button
+                                        SHOW_ACCOUNTS.button
                                     )
                                 )
                             } else {
@@ -126,6 +134,7 @@ class TelegramBotService(
                                     chatId = ChatId.fromId(userId),
                                     text = Constants.INVALID_TOKEN_MESSAGE,
                                 )
+                                logger.error { "Пользователь ${message.chat.username} ввел неправильный токен для Tinkoff API" }
                             }
                         }
                     }
@@ -141,7 +150,7 @@ class TelegramBotService(
                         val accountFirstName = "contest2024:alekppv/investment-helper:1"
                         val accountSecondName = "contest2024:alekppv/investment-helper:2"
 
-                        val firstAccount = userService.openNewAccountAndPayIn(chatId, accountFirstName)
+                        val firstAccount = accountService.openNewAccountAndPayIn(chatId, accountFirstName)
 
                         when {
                             firstAccount.isSuccessful -> bot.sendMessage(
@@ -157,7 +166,7 @@ class TelegramBotService(
                             else -> { }
                         }
 
-                        val secondAccount = userService.openNewAccountAndPayIn(chatId, accountSecondName)
+                        val secondAccount = accountService.openNewAccountAndPayIn(chatId, accountSecondName)
 
                         when {
                             secondAccount.isSuccessful -> bot.sendMessage(
@@ -178,9 +187,9 @@ class TelegramBotService(
                     val chatId = callbackQuery.message?.chat?.id ?: return@callbackQuery
 
                     if (validateClient(bot, chatId)) {
-                        userService.getClientAccounts(chatId).data
+                        accountService.getClientAccounts(chatId).data
                             ?.forEach {
-                                userService.closeAccount(chatId, it.id)
+                                accountService.closeAccount(chatId, it.id)
                             }
                     }
                 }

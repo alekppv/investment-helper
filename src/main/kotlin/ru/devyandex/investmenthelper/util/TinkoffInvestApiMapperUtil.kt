@@ -1,6 +1,7 @@
 package ru.devyandex.investmenthelper.util
 
 import org.ta4j.core.BaseBar
+import ru.devyandex.investmenthelper.constants.Constants.CURRENCY
 import ru.devyandex.investmenthelper.dto.enums.Interval
 import ru.devyandex.investmenthelper.dto.enums.Interval.*
 import ru.tinkoff.piapi.contract.v1.Candle
@@ -16,6 +17,9 @@ import java.time.ZonedDateTime
 
 fun Money.toAmountCurrencyString() =
     "${this.value}${this.currency}"
+
+fun String?.toNumberAmountWithoutCurrency() =
+    this?.removeSuffix(CURRENCY)?.toBigDecimal()?.setScale(2)
 
 fun HistoricCandle.toBaseBar(duration: Duration) =
     BaseBar(
