@@ -1,7 +1,7 @@
 package ru.devyandex.investmenthelper.service.core.strategy
 
 import org.springframework.stereotype.Service
-import org.ta4j.core.*
+import org.ta4j.core.BaseStrategy
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandFacade
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
@@ -25,21 +25,22 @@ import java.time.OffsetDateTime
 
 
 @Service
-class SimpleScalpingStrategy(
+class DoubleEmaWithBollingerScalpingStrategy(
     private val marketDataService: IMarketDataService
 ) : AbstractStrategy() {
-    override fun getName(): StrategyEnum = StrategyEnum.SIMPLE_SCALPING
+    override fun getName(): StrategyEnum = StrategyEnum.DOUBLE_EMA_WITH_BOLLINGER
 
     override fun startProcessing(id: Long, companyStrategy: CompanyStrategy) {
         val interval = Interval.INTERVAL_5_MIN
 
         importHistoricalData(id, companyStrategy, interval)
         subscribeToNewData(id, companyStrategy, interval)
-        createIndicators(id)
+        initStrategy(id)
     }
 
-    private fun createIndicators(id: Long) {
+    private fun initStrategy(id: Long) {
         barSeriesStorage[id]?.let { barSeries ->
+
             val closePriceIndicator = ClosePriceIndicator(barSeries)
             val emaFast = EMAIndicator(closePriceIndicator, EMA_FAST_BAR_COUNT)
             val emaSlow = EMAIndicator(closePriceIndicator, EMA_SLOW_BAR_COUNT)
@@ -57,10 +58,10 @@ class SimpleScalpingStrategy(
             val longStrategy = BaseStrategy(
                 "SIMPLE_SCALPING_LONG_0.0.1",
                 emaLongEntryRule(emaFast, emaSlow, closePriceIndicator, bollingerBandFacade),
-                StopLossRule(closePriceIndicator, BigDecimal(1.1)).and(
+                StopLossRule(closePriceIndicator, BigDecimal(0.2)).or(
                     StopGainRule(
                         closePriceIndicator,
-                        BigDecimal(1.5)
+                        BigDecimal(0.1)
                     )
                 )
             )
@@ -68,15 +69,16 @@ class SimpleScalpingStrategy(
             val shortStrategy = BaseStrategy(
                 "SIMPLE_SCALPING_SHORT_0.0.1",
                 emaShortEntryRule(emaFast, emaSlow, closePriceIndicator, bollingerBandFacade),
-                StopGainRule(closePriceIndicator, BigDecimal(1.1)).and(
+                StopGainRule(closePriceIndicator, BigDecimal(0.2)).or(
                     StopLossRule(
                         closePriceIndicator,
-                        BigDecimal(1.5)
+                        BigDecimal(0.1)
                     )
                 )
             )
 
-            addStrategy(id, longStrategy.or(shortStrategy).wrap(SignalType.DEFAULT))
+            addStrategy(id, longStrategy.wrap(SignalType.LONG))
+            addStrategy(id, shortStrategy.wrap(SignalType.SHORT))
         }
     }
 
@@ -86,7 +88,7 @@ class SimpleScalpingStrategy(
         closePriceIndicator: ClosePriceIndicator,
         bollingerBandFacade: BollingerBandFacade
     ) =
-        AllInSeriesRule(UnderIndicatorRule(emaFast, emaSlow), 6)
+        AllInSeriesRule(OverIndicatorRule(emaFast, emaSlow), 5)
             .and(UnderOrEqualIndicatorRule(closePriceIndicator, bollingerBandFacade.lower()))
 
     private fun emaShortEntryRule(
@@ -95,7 +97,7 @@ class SimpleScalpingStrategy(
         closePriceIndicator: ClosePriceIndicator,
         bollingerBandFacade: BollingerBandFacade
     ) =
-        AllInSeriesRule(OverIndicatorRule(emaFast, emaSlow), 6)
+        AllInSeriesRule(UnderIndicatorRule(emaFast, emaSlow), 5)
             .and(OverOrEqualIndicatorRule(closePriceIndicator, bollingerBandFacade.upper()))
 
     private fun subscribeToNewData(

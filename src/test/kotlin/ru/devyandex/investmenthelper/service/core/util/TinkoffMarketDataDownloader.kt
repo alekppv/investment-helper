@@ -34,7 +34,6 @@ class TinkoffMarketDataDownloader {
                         it.buyAvailableFlag &&
                         it.sellAvailableFlag &&
                         it.realExchange == RealExchange.REAL_EXCHANGE_MOEX
-
             }
 
     @Test

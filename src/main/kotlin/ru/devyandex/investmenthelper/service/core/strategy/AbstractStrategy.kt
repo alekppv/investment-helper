@@ -1,13 +1,15 @@
 package ru.devyandex.investmenthelper.service.core.strategy
 
+import org.apache.commons.lang3.math.NumberUtils.max
 import org.jfree.chart.ChartFactory
-import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
 import org.jfree.chart.axis.NumberAxis
 import org.jfree.chart.plot.DatasetRenderingOrder
 import org.jfree.chart.plot.Marker
 import org.jfree.chart.plot.ValueMarker
 import org.jfree.chart.plot.XYPlot
+import org.jfree.chart.renderer.xy.CandlestickRenderer
+import org.jfree.chart.renderer.xy.CandlestickRenderer.WIDTHMETHOD_SMALLEST
 import org.jfree.chart.renderer.xy.XYItemRenderer
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer
 import org.jfree.data.time.Minute
@@ -15,19 +17,18 @@ import org.jfree.data.time.TimeSeries
 import org.jfree.data.time.TimeSeriesCollection
 import org.jfree.data.xy.DefaultOHLCDataset
 import org.jfree.data.xy.OHLCDataItem
-import org.ta4j.core.Bar
-import org.ta4j.core.BarSeries
-import org.ta4j.core.BaseBarSeries
-import org.ta4j.core.TradingRecord
+import org.ta4j.core.*
+import org.ta4j.core.analysis.cost.ZeroCostModel
 import org.ta4j.core.backtest.BarSeriesManager
+import org.ta4j.core.num.DecimalNum
 import ru.devyandex.investmenthelper.dto.enums.SignalType
 import ru.devyandex.investmenthelper.dto.enums.StrategyEnum
 import ru.devyandex.investmenthelper.dto.enums.TradeType
 import ru.devyandex.investmenthelper.dto.setting.CompanyStrategy
+import ru.devyandex.investmenthelper.dto.strategy.BackTestReport
 import ru.devyandex.investmenthelper.dto.strategy.NumIndicatorWithName
 import ru.devyandex.investmenthelper.dto.strategy.StrategySignal
 import ru.devyandex.investmenthelper.dto.strategy.StrategyWrapper
-import java.awt.BasicStroke
 import java.awt.Color
 import java.text.SimpleDateFormat
 import java.util.*
@@ -93,15 +94,73 @@ abstract class AbstractStrategy : Strategy {
      * тестирование стратегии на заготовленных заранее данных.
      *
      * @param id - Идентификатор пользователя
+     * @param lastCandles - Количество свечей с конца, по которым требуется провести расчет
      * @return TradingRecord, содержащий в себе историю сессии
      */
-    override fun backTest(id: Long): Map<SignalType, TradingRecord> =
+    override fun backTest(id: Long, lastCandles: Int): Map<SignalType, TradingRecord> =
         barSeriesStorage[id]?.let { bars ->
-            val barSeriesManager = BarSeriesManager(bars)
+            val barSeriesManager =
+                BarSeriesManager(bars.getSubSeries(max(bars.endIndex - lastCandles, bars.beginIndex), bars.endIndex))
             strategies[id]?.map { wrapper ->
                 wrapper.signalType to barSeriesManager.run(wrapper.strategy)
             }
         }?.toMap() ?: emptyMap()
+
+    /**
+     * Метод тестирования стратегии ручным перебором свечей с проверкой shouldOperate.
+     * Является временным решением для сравнения с библиотечным BarSeriesManager
+     */
+    private fun backTestIntoOneRecord(id: Long, lastCandles: Int): Map<SignalType, TradingRecord> =
+        barSeriesStorage[id]?.let { bars ->
+            val tradingRecord = BaseTradingRecord(
+                Trade.TradeType.BUY,
+                max(bars.endIndex - lastCandles, bars.beginIndex),
+                bars.endIndex,
+                ZeroCostModel(),
+                ZeroCostModel()
+            )
+            bars
+                .barData
+                .mapIndexed { index, bar ->
+                    strategies[id]?.map { wrapper ->
+                        val shouldOperate = wrapper
+                            .strategy
+                            .shouldOperate(index, tradingRecord)
+
+                        if (shouldOperate) {
+                            tradingRecord.operate(index, bar.closePrice, DecimalNum.valueOf(3))
+                        }
+                    }
+                }
+
+            mapOf(SignalType.DEFAULT to tradingRecord)
+        } ?: emptyMap()
+
+    private fun longShortBackTest(id: Long, lastCandles: Int): Map<SignalType, TradingRecord> =
+        barSeriesStorage[id]?.let { bars ->
+            strategies[id]?.associate { wrapper ->
+                val tradingRecord = BaseTradingRecord(
+                    Trade.TradeType.BUY,
+                    max(bars.endIndex - lastCandles, bars.beginIndex),
+                    bars.endIndex,
+                    ZeroCostModel(),
+                    ZeroCostModel()
+                )
+
+                bars
+                    .barData
+                    .mapIndexed { index, bar ->
+                        val shouldOperate = wrapper
+                            .strategy
+                            .shouldOperate(index, tradingRecord)
+
+                        if (shouldOperate) {
+                            tradingRecord.operate(index, bar.closePrice, DecimalNum.valueOf(3))
+                        }
+                    }
+                wrapper.signalType to tradingRecord
+            }
+        } ?: emptyMap()
 
 
     /**
@@ -111,16 +170,15 @@ abstract class AbstractStrategy : Strategy {
      *
      * @return Экземпляр JFreeChart, содержащий в себе свечи и графики работы идентификаторов.
      */
-    //TODO Можно оптимизировать, избавившись от нескольких прогонов по списку баров
-    override fun prepareChart(id: Long, lastBars: Int): JFreeChart {
+//TODO Можно оптимизировать, избавившись от нескольких прогонов по списку баров
+    override fun backTestWithChart(id: Long, lastBars: Int): BackTestReport {
         val data = TimeSeriesCollection()
         indicators[id]
-            ?.filter { it.name != "ClosePrice" }
             ?.forEach { numIndicatorWithNames ->
                 val chartTimeSeries = TimeSeries(numIndicatorWithNames.name)
                 val barSeries = numIndicatorWithNames.indicator.barSeries
 
-                for (i in barSeries.endIndex - lastBars..barSeries.endIndex) {
+                for (i in max(barSeries.endIndex - lastBars, barSeries.beginIndex)..barSeries.endIndex) {
                     chartTimeSeries.add(
                         Minute(Date.from(barSeries.getBar(i).endTime.toInstant())),
                         numIndicatorWithNames.indicator.getValue(i).doubleValue()
@@ -131,10 +189,11 @@ abstract class AbstractStrategy : Strategy {
             }
 
         val barSeries = barSeriesStorage[id] ?: BaseBarSeries()
+        val subseries = barSeries
+            .getSubSeries(max((barSeries.endIndex - lastBars), barSeries.beginIndex), barSeries.endIndex - 1)
 
-        val ohlcData = barSeries
+        val ohlcData = subseries
             .barData
-            .subList(barSeries.endIndex - lastBars, barSeries.endIndex - 1)
             .map {
                 OHLCDataItem(
                     Date.from(it.endTime.toInstant()),
@@ -159,7 +218,10 @@ abstract class AbstractStrategy : Strategy {
             true
         )
 
+        chart.antiAlias = true
+
         val plot = chart.plot as XYPlot
+        (plot.renderer as CandlestickRenderer).autoWidthMethod = WIDTHMETHOD_SMALLEST
         (plot.rangeAxis as NumberAxis).autoRangeIncludesZero = false
         val domainAxis = plot.domainAxis as DateAxis
 
@@ -173,46 +235,79 @@ abstract class AbstractStrategy : Strategy {
         plot.setRenderer(1, renderer2)
         plot.setDatasetRenderingOrder(DatasetRenderingOrder.FORWARD)
 
-        backTest(id)
-            .values
-            .forEach { tradingRecord ->
+        val tradingRecords = backTest(id, lastBars)
+            .onEach { (signal, tradingRecord) ->
                 addBuySellSignals(
+                    signal,
                     tradingRecord,
                     plot,
-                    barSeries
+                    subseries
                 )
             }
 
-        return chart
+        return BackTestReport(chart, tradingRecords)
     }
 
-    //TODO Заставить работать
-    private fun addBuySellSignals(tradingRecord: TradingRecord, plot: XYPlot, series: BarSeries) =
+    /**
+     * Метод отрисовки сигналов на графике.
+     * @param tradingRecord - История торговой сессии библиотеки ta4j
+     * @param plot - класс для отрисовки элементов на графике
+     * @param series - Список свечей
+     */
+//TODO Заставить работать. TradingRecord можно заменить на собственную сущность,
+// чтобы можно было проверять на своих методах расчета
+    private fun addBuySellSignals(signal: SignalType, tradingRecord: TradingRecord, plot: XYPlot, series: BarSeries) {
         tradingRecord
             .positions
             .forEach { position ->
-                val buySignalBarTime = Minute(
-                    Date.from(series.getBar(position.entry.index).endTime.toInstant())
-                ).firstMillisecond.toDouble()
-
-                val buyMarker: Marker = ValueMarker(buySignalBarTime)
-                buyMarker.paint = Color.GREEN
-                buyMarker.label = "B"
-                buyMarker.stroke = BasicStroke(100.0F)
-
-                plot.addDomainMarker(buyMarker)
-
-                val sellSignalBarTime = Minute(
-                    Date.from(series.getBar(position.exit.index).endTime.toInstant())
-                ).firstMillisecond.toDouble()
-                val sellMarker: Marker = ValueMarker(sellSignalBarTime)
-                sellMarker.paint = Color.RED
-                sellMarker.label = "S"
-                buyMarker.stroke = BasicStroke(100.0F)
-
-                plot.addDomainMarker(sellMarker)
+                addPosition(signal, position, plot, series)
             }
 
+        if (!tradingRecord.isClosed) {
+            addPosition(signal, tradingRecord.currentPosition, plot, series)
+        }
+    }
+
+    private fun addPosition(signal: SignalType, position: Position, plot: XYPlot, series: BarSeries) {
+        val entryTime = if (position.entry.index > series.endIndex) {
+            series.getBar(position.entry.index - 1).endTime.plusMinutes(5).toInstant()
+        } else {
+            series.getBar(position.entry.index).endTime.toInstant()
+        }
+
+        val buySignalBarTime = Minute(
+            Date.from(entryTime)
+        ).firstMillisecond.toDouble()
+
+        val buyMarker: Marker = ValueMarker(buySignalBarTime)
+        buyMarker.paint = Color.GREEN
+        buyMarker.label = signal.name.substring(0, 1)
+
+        plot.addDomainMarker(buyMarker)
+
+        position.exit?.let {
+            val exitTime = if (position.exit.index > series.endIndex) {
+                series.getBar(position.exit.index - 1).endTime.plusMinutes(5).toInstant()
+            } else {
+                series.getBar(position.exit.index).endTime.toInstant()
+            }
+
+            val sellSignalBarTime = Minute(
+                Date.from(exitTime)
+            ).firstMillisecond.toDouble()
+            val sellMarker: Marker = ValueMarker(sellSignalBarTime)
+            sellMarker.paint = Color.RED
+            sellMarker.label = signal.name.substring(0, 1)
+
+            plot.addDomainMarker(sellMarker)
+        }
+    }
+
+    /**
+     * Метод для добавления свеч во внутреннее хранилище
+     * @param id - Идентификатор пользователя
+     * @param bar - Свеча
+     */
     protected fun appendBar(id: Long, bar: Bar) {
         val storage = barSeriesStorage[id]
         if (storage != null) {
@@ -228,24 +323,34 @@ abstract class AbstractStrategy : Strategy {
         }
     }
 
-    protected fun addStrategy(id: Long, vararg strategy: StrategyWrapper) {
+    /**
+     * Метод для добавления стратегий во внутреннее хранилище
+     * @param id - Идентификатор пользователя
+     * @param strategyVararg - Стратегии
+     */
+    protected fun addStrategy(id: Long, vararg strategyVararg: StrategyWrapper) {
         val strategyList = strategies[id]
         if (strategyList != null) {
-            strategyList.addAll(strategy)
+            strategyList.addAll(strategyVararg)
         } else {
             val newStorage = CopyOnWriteArrayList<StrategyWrapper>()
-            newStorage.addAll(strategy)
+            newStorage.addAll(strategyVararg)
             strategies[id] = newStorage
         }
     }
 
-    protected fun addIndicators(id: Long, vararg indicator: NumIndicatorWithName) {
+    /**
+     * Метод для добавления индикаторов во внутреннее хранилище
+     * @param id - Идентификатор пользователя
+     * @param indicatorVararg - Индикаторы
+     */
+    protected fun addIndicators(id: Long, vararg indicatorVararg: NumIndicatorWithName) {
         val indicatorList = indicators[id]
         if (indicatorList != null) {
-            indicatorList.addAll(indicator)
+            indicatorList.addAll(indicatorVararg)
         } else {
             val newStorage = CopyOnWriteArrayList<NumIndicatorWithName>()
-            newStorage.addAll(indicator)
+            newStorage.addAll(indicatorVararg)
             indicators[id] = newStorage
         }
     }

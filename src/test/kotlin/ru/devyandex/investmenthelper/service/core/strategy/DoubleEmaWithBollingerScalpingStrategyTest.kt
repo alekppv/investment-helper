@@ -18,31 +18,49 @@ class DoubleEmaWithBollingerScalpingStrategyTest {
     @Test
     fun simpleScalpingStrategyBackTest() {
         //Путь папки с файлами данных
-        val folder = "C:\\progs\\local\\data"
+        val baseFolder = "C:\\progs\\local"
+        val folder = "$baseFolder\\data"
+
+        var sum = 0.0
 
         File(folder)
             .listFiles()
             ?.forEach {
                 //Путь выходного файла
-                val outputFileName = "C:\\progs\\local\\graphics\\chart_${it.name}.png"
+                val outputFileName = "$baseFolder\\graphics\\chart_${it.name}.png"
                 //Количество свечей с конца, по которым будет создан график
                 val reportSize = 100
 
                 val marketData = MarketDataFileMockService(it.absolutePath)
 
-                val doubleEmaWithBollingerScalpingStrategy = DoubleEmaWithBollingerScalpingStrategy(marketData)
-                doubleEmaWithBollingerScalpingStrategy.startProcessing(1, CompanyStrategy("", StrategyEnum.SIMPLE_SCALPING))
+                val doubleEmaWithBollingerScalpingStrategy = DoubleEmaWithBollingerAndATRStrategy(marketData)
+                doubleEmaWithBollingerScalpingStrategy.startProcessing(1, CompanyStrategy("", StrategyEnum.DOUBLE_EMA_WITH_BOLLINGER))
 
-                val chart = doubleEmaWithBollingerScalpingStrategy.prepareChart(1L, reportSize)
+                val backTestReport = doubleEmaWithBollingerScalpingStrategy.backTestWithChart(1L, reportSize)
+
+                val results =
+                    backTestReport
+                        .tradingRecords
+                        .map { (_, tradingRecord) ->
+                            tradingRecord
+                                .positions.sumOf { pos ->
+                                    pos.profit.doubleValue()
+                                }
+
+                        }.sum()
+
+                sum += results
+
                 FileOutputStream(File(outputFileName)).use { stream ->
                     ChartUtils.writeChartAsPNG(
                         stream,
-                        chart,
+                        backTestReport.chart,
                         1920,
                         600
                     )
                 }
             }
 
+        println(sum)
     }
 }

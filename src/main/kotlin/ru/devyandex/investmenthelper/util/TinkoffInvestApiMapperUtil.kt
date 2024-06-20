@@ -28,7 +28,7 @@ fun HistoricCandle.toBaseBar(duration: Duration) =
         mapUnitsAndNanos(this.open.units, this.open.nano),
         mapUnitsAndNanos(this.high.units, this.high.nano),
         mapUnitsAndNanos(this.low.units, this.low.nano),
-        mapUnitsAndNanos(this.low.units, this.low.nano),
+        mapUnitsAndNanos(this.close.units, this.close.nano),
         this.volume.toBigDecimal()
     )
 
@@ -39,7 +39,7 @@ fun Candle.toBaseBar(duration: Duration) =
         mapUnitsAndNanos(this.open.units, this.open.nano),
         mapUnitsAndNanos(this.high.units, this.high.nano),
         mapUnitsAndNanos(this.low.units, this.low.nano),
-        mapUnitsAndNanos(this.low.units, this.low.nano),
+        mapUnitsAndNanos(this.close.units, this.close.nano),
         this.volume.toBigDecimal()
     )
 

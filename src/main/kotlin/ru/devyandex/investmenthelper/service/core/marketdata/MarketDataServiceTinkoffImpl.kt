@@ -15,7 +15,6 @@ class MarketDataServiceTinkoffImpl(
     private val clientProvider: InvestApiClientProvider
 ) : IMarketDataService {
 
-    //TODO Добавить проверку на отсутствие клиента в хранилище
     override fun subscribeToCandlesStream(
         id: Long,
         instrument: String,
