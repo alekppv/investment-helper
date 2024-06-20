@@ -19,6 +19,7 @@ repositories {
 	maven { url = uri("https://repo.spring.io/milestone") }
 	maven { url = uri("https://jitpack.io") }
 	maven { url = uri("https://repo.spring.io/snapshot") }
+	maven { url = uri("https://oss.sonatype.org/content/repositories/snapshots") }
 }
 
 dependencies {
@@ -32,7 +33,11 @@ dependencies {
 	runtimeOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
+
 	implementation("ru.tinkoff.piapi:java-sdk-core:1.19")
+	implementation("org.ta4j:ta4j-core:0.16-SNAPSHOT")
+	implementation("com.opencsv:opencsv:5.9")
+	implementation("org.jfree:jfreechart:1.5.4")
 }
 
 tasks.withType<KotlinCompile> {

@@ -10,11 +10,16 @@ class SandboxInvestApiClientProviderImpl : InvestApiClientProvider {
     override fun getClient(id: Long) = clientStorage[id]
 
     override fun upsertClient(id: Long, token: String): ApiClientDto {
-        val clientApi = ApiClientDto(InvestApi.createSandbox(token))
+        val clientApi = ApiClientDto(id, InvestApi.createSandbox(token))
         clientStorage[id] = clientApi
 
         return clientApi
     }
+
+    override fun getActiveClients(): List<ApiClientDto> =
+        clientStorage
+            .values
+            .filter { it.isActive }
 
     override fun removeClient(id: Long) {
         clientStorage.remove(id)
